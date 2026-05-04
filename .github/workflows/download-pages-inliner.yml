@@ -1,0 +1,64 @@
+name: Download Pages with Inliner
+
+on:
+  workflow_dispatch:
+
+permissions:
+  contents: write
+
+jobs:
+  download:
+    runs-on: ubuntu-latest
+    
+    steps:
+    - uses: actions/checkout@v4
+    
+    - name: Setup Node.js
+      uses: actions/setup-node@v4
+      with:
+        node-version: '18'
+    
+    - name: Install inliner
+      run: npm install -g inliner
+    
+    - name: Download each URL
+      run: |
+        mkdir -p downloaded_pages
+        
+        # Read URLs from file and process each one
+        while IFS= read -r url; do
+          [[ -z "$url" || "$url" =~ ^# ]] && continue
+          
+          echo "Downloading: $url"
+          filename=$(echo "$url" | sed -E 's|https?://||' | sed 's|/|_|g' | sed 's|\.|_|g')
+          inliner "$url" > "downloaded_pages/${filename}.html"
+          echo "✅ Saved: ${filename}.html"
+          
+        done < urls
+    
+    - name: Create index page
+      run: |
+        cat > downloaded_pages/index.html << 'EOF'
+        <!DOCTYPE html>
+        <html>
+        <head><title>Downloaded Pages</title></head>
+        <body>
+          <h1>Downloaded Pages</h1>
+          <ul>
+            $(for f in downloaded_pages/*.html; do
+              if [ "$(basename "$f")" != "index.html" ]; then
+                echo "<li><a href=\"$(basename "$f")\">$(basename "$f" .html)</a></li>"
+              fi
+            done)
+          </ul>
+        </body>
+        </html>
+        EOF
+    
+    - name: Commit and push
+      uses: EndBug/add-and-commit@v9
+      with:
+        add: 'downloaded_pages/'
+        message: 'Download web pages'
+        default_author: github_actions
+        token: ${{ secrets.GITHUB_TOKEN }}
