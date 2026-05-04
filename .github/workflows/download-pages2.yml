@@ -31,7 +31,7 @@ jobs:
         const fs = require('fs');
         const path = require('path');
         
-        const urls = fs.readFileSync('urls.txt', 'utf8')
+        const urls = fs.readFileSync('urls', 'utf8')
           .split('\n')
           .map(l => l.trim())
           .filter(l => l && !l.startsWith('#'));
