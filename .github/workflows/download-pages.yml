@@ -27,7 +27,7 @@ jobs:
       run: pip install requests beautifulsoup4
     
     - name: Run download script
-      run: python download_pages.py
+      run: python download_pages.py https://www.iranintl.com ./downloaded_pages/iranintl.com.html
     
     - name: Commit and push
       run: |
