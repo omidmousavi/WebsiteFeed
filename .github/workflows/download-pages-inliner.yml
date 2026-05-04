@@ -24,7 +24,7 @@ jobs:
     - name: Download and inline pages
       run: |
         mkdir -p downloaded_pages_inliner
-        inliner -m --videos https://www.iranintl.com > downloaded_pages_inliner/iranintl.html"      
+        inliner -m --videos https://www.iranintl.com > downloaded_pages_inliner/iranintl.html
         echo "✅ Saved"
         sleep 2
     
