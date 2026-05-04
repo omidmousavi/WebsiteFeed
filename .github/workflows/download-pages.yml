@@ -38,7 +38,7 @@ jobs:
       run: |
         git config --global user.name "github-actions[bot]"
         git config --global user.email "github-actions[bot]@users.noreply.github.com"
-        git pull --rebase
         git add downloaded_pages/
         git commit -m "Update downloaded pages - $(date '+%Y-%m-%d %H:%M:%S')" || echo "No changes to commit"
+        git pull --rebase --autostash
         git push
