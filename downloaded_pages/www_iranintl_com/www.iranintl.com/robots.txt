@@ -1,0 +1,10 @@
+User-Agent: Googlebot-news
+Allow: /
+
+User-Agent: Twitterbot
+Allow: /
+
+User-Agent: *
+Allow: /
+
+Sitemap: https://www.iranintl.com/sitemap.xml
