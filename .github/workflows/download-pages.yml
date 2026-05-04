@@ -26,8 +26,11 @@ jobs:
     - name: Install dependencies
       run: pip install requests beautifulsoup4
     
+    - name: Create output directory
+      run: mkdir -p downloaded_pages
+
     - name: Run download script
-      run: python download_pages.py https://www.iranintl.com ./downloaded_pages/iranintl.com.html
+      run: python download_pages.py https://www.iranintl.com downloaded_pages/iranintl.com.html
     
     - name: Commit and push
       run: |
