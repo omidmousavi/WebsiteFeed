@@ -32,40 +32,12 @@ jobs:
           filename=$(echo "$url" | sed -E 's|https?://||' | sed 's|/|_|g' | sed 's|\.|_|g')
           
           # Use inliner with custom user agent header
-          inliner -H 'User-Agent: Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36' "$url" > "downloaded_pages/${filename}.html"
+          inliner -m --preserve-comments -H 'User-Agent: Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36' "$url" > "downloaded_pages/${filename}.html"
           
           echo "✅ Saved: ${filename}.html"
           sleep 2
         done < urls
     
-    - name: Create index page
-      run: |
-        cat > downloaded_pages/index.html << 'EOF'
-        <!DOCTYPE html>
-        <html>
-        <head>
-          <title>Downloaded Pages</title>
-          <style>
-            body { font-family: Arial, sans-serif; margin: 40px; }
-            h1 { color: #333; }
-            ul { list-style: none; padding: 0; }
-            li { margin: 10px 0; }
-            a { color: #0366d6; text-decoration: none; }
-            a:hover { text-decoration: underline; }
-          </style>
-        </head>
-        <body>
-          <h1>📥 Downloaded Web Pages</h1>
-          <ul>
-            $(for f in downloaded_pages/*.html; do
-              if [ "$(basename "$f")" != "index.html" ]; then
-                echo "<li><a href=\"$(basename "$f")\">$(basename "$f" .html | sed 's/_/./g')</a></li>"
-              fi
-            done)
-          </ul>
-        </body>
-        </html>
-        EOF
     
     - name: Commit and push
       uses: EndBug/add-and-commit@v9
