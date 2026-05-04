@@ -5,6 +5,7 @@ import os
 import re
 import base64
 from pathlib import Path
+from urllib.parse import urlparse
 
 def clone_page_to_single_html(url, output_file="cloned_page.html"):
     """
@@ -17,7 +18,12 @@ def clone_page_to_single_html(url, output_file="cloned_page.html"):
     
     # Headers to mimic a real browser
     headers = {
-        'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/91.0.4472.124 Safari/537.36'
+        'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/91.0.4472.124 Safari/537.36',
+        'Accept': 'text/html,application/xhtml+xml,application/xml;q=0.9,image/webp,*/*;q=0.8',
+        'Accept-Language': 'en-US,en;q=0.5',
+        'Accept-Encoding': 'gzip, deflate',
+        'Connection': 'keep-alive',
+        'Upgrade-Insecure-Requests': '1'
     }
     
     try:
@@ -34,16 +40,19 @@ def clone_page_to_single_html(url, output_file="cloned_page.html"):
         css_count = 0
         for link in soup.find_all('link', rel='stylesheet'):
             css_url = link.get('href')
-            if css_url:
+            if css_url and not css_url.startswith('data:'):
                 full_css_url = urllib.parse.urljoin(url, css_url)
                 try:
                     css_content = fetch_resource(full_css_url, headers)
                     if css_content:
+                        # Process any @import or url() in the CSS
+                        css_content = process_css_urls(css_content, full_css_url, headers)
                         # Embed CSS directly
                         style_tag = soup.new_tag('style')
                         style_tag.string = css_content
                         link.replace_with(style_tag)
                         css_count += 1
+                        print(f"  Embedded: {full_css_url}")
                 except Exception as e:
                     print(f"  Failed to fetch CSS {full_css_url}: {e}")
         
@@ -58,7 +67,10 @@ def clone_page_to_single_html(url, output_file="cloned_page.html"):
         img_count = 0
         for img in soup.find_all('img'):
             src = img.get('src')
-            if src:
+            srcset = img.get('srcset')
+            
+            # Handle src attribute
+            if src and not src.startswith('data:'):
                 full_img_url = urllib.parse.urljoin(url, src)
                 try:
                     img_data = fetch_resource_binary(full_img_url, headers)
@@ -68,8 +80,26 @@ def clone_page_to_single_html(url, output_file="cloned_page.html"):
                         b64_data = base64.b64encode(img_data).decode('utf-8')
                         img['src'] = f"data:{content_type};base64,{b64_data}"
                         img_count += 1
+                        print(f"  Embedded image: {full_img_url}")
                 except Exception as e:
                     print(f"  Failed to fetch image {full_img_url}: {e}")
+            
+            # Handle srcset attribute (responsive images)
+            if srcset:
+                # Take the first image from srcset as fallback
+                srcset_parts = srcset.split(',')
+                if srcset_parts:
+                    first_src = srcset_parts[0].strip().split(' ')[0]
+                    if not first_src.startswith('data:'):
+                        full_img_url = urllib.parse.urljoin(url, first_src)
+                        try:
+                            img_data = fetch_resource_binary(full_img_url, headers)
+                            if img_data:
+                                content_type = get_content_type(full_img_url)
+                                b64_data = base64.b64encode(img_data).decode('utf-8')
+                                img['srcset'] = f"data:{content_type};base64,{b64_data}"
+                        except Exception as e:
+                            print(f"  Failed to fetch srcset image {full_img_url}: {e}")
         
         # Process background images in style tags
         for style_tag in soup.find_all('style'):
@@ -81,7 +111,7 @@ def clone_page_to_single_html(url, output_file="cloned_page.html"):
         js_count = 0
         for script in soup.find_all('script', src=True):
             js_url = script.get('src')
-            if js_url:
+            if js_url and not js_url.startswith('data:'):
                 full_js_url = urllib.parse.urljoin(url, js_url)
                 try:
                     js_content = fetch_resource(full_js_url, headers)
@@ -91,32 +121,40 @@ def clone_page_to_single_html(url, output_file="cloned_page.html"):
                         new_script.string = js_content
                         script.replace_with(new_script)
                         js_count += 1
+                        print(f"  Embedded JS: {full_js_url}")
                 except Exception as e:
                     print(f"  Failed to fetch JS {full_js_url}: {e}")
         
         # Process other resources (favicon, etc.)
         for link in soup.find_all('link', href=True):
             href = link.get('href')
-            if '.ico' in href.lower() or 'favicon' in href.lower():
-                full_url = urllib.parse.urljoin(url, href)
-                try:
-                    img_data = fetch_resource_binary(full_url, headers)
-                    if img_data:
-                        content_type = get_content_type(full_url)
-                        b64_data = base64.b64encode(img_data).decode('utf-8')
-                        link['href'] = f"data:{content_type};base64,{b64_data}"
-                except:
-                    pass
+            rel = link.get('rel', [])
+            if href and not href.startswith('data:'):
+                if any(x in href.lower() for x in ['.ico', 'favicon']) or (rel and 'icon' in str(rel).lower()):
+                    full_url = urllib.parse.urljoin(url, href)
+                    try:
+                        img_data = fetch_resource_binary(full_url, headers)
+                        if img_data:
+                            content_type = get_content_type(full_url)
+                            b64_data = base64.b64encode(img_data).decode('utf-8')
+                            link['href'] = f"data:{content_type};base64,{b64_data}"
+                            print(f"  Embedded favicon: {full_url}")
+                    except:
+                        pass
         
         # Save the complete HTML
         print(f"Saving to {output_file}...")
         with open(output_file, 'w', encoding='utf-8') as f:
             f.write(str(soup))
         
-        print(f"Success! Page cloned to {output_file}")
+        print(f"\nSuccess! Page cloned to {output_file}")
         print(f"  - Embedded CSS files: {css_count}")
         print(f"  - Embedded images: {img_count}")
         print(f"  - Embedded JS files: {js_count}")
+        
+        # Calculate file size
+        file_size = os.path.getsize(output_file) / (1024 * 1024)
+        print(f"  - Final file size: {file_size:.2f} MB")
         
         return True
         
@@ -125,6 +163,8 @@ def clone_page_to_single_html(url, output_file="cloned_page.html"):
         return False
     except Exception as e:
         print(f"Unexpected error: {e}")
+        import traceback
+        traceback.print_exc()
         return False
 
 def fetch_resource(url, headers):
@@ -134,7 +174,8 @@ def fetch_resource(url, headers):
         response.raise_for_status()
         response.encoding = response.apparent_encoding or 'utf-8'
         return response.text
-    except:
+    except Exception as e:
+        print(f"    Error fetching {url}: {e}")
         return None
 
 def fetch_resource_binary(url, headers):
@@ -143,7 +184,8 @@ def fetch_resource_binary(url, headers):
         response = requests.get(url, headers=headers, timeout=15)
         response.raise_for_status()
         return response.content
-    except:
+    except Exception as e:
+        print(f"    Error fetching binary {url}: {e}")
         return None
 
 def process_css_urls(css_content, base_url, headers):
@@ -154,31 +196,65 @@ def process_css_urls(css_content, base_url, headers):
     # Find all url(...) patterns
     url_pattern = re.compile(r'url\([\'"]?(.*?)[\'"]?\)', re.IGNORECASE)
     
+    # Also handle @import
+    import_pattern = re.compile(r'@import\s+[\'"]?(.*?)[\'"]?;', re.IGNORECASE)
+    
+    def replace_import(match):
+        import_url = match.group(1)
+        if import_url.startswith('data:') or import_url.startswith('http://') or import_url.startswith('https://'):
+            # Try to fetch and embed imported CSS
+            full_url = urllib.parse.urljoin(base_url, import_url)
+            imported_css = fetch_resource(full_url, headers)
+            if imported_css:
+                # Recursively process the imported CSS
+                return process_css_urls(imported_css, full_url, headers)
+        return match.group(0)
+    
     def replace_url(match):
-        url_path = match.group(1)
-        # Skip data URLs
+        url_path = match.group(1).strip()
+        # Skip data URLs and absolute external URLs that might be problematic
         if url_path.startswith('data:'):
             return match.group(0)
         
         full_url = urllib.parse.urljoin(base_url, url_path)
+        
+        # Skip external domains if needed (optional)
+        # parsed_base = urlparse(base_url)
+        # parsed_full = urlparse(full_url)
+        # if parsed_base.netloc != parsed_full.netloc:
+        #     return match.group(0)
+        
         try:
             # Detect if it's likely an image
-            if any(ext in full_url.lower() for ext in ['.png', '.jpg', '.jpeg', '.gif', '.svg', '.webp', '.ico']):
+            if any(ext in full_url.lower() for ext in ['.png', '.jpg', '.jpeg', '.gif', '.svg', '.webp', '.ico', '.bmp']):
                 img_data = fetch_resource_binary(full_url, headers)
                 if img_data:
                     content_type = get_content_type(full_url)
                     b64_data = base64.b64encode(img_data).decode('utf-8')
                     return f"url(data:{content_type};base64,{b64_data})"
+            elif any(ext in full_url.lower() for ext in ['.woff', '.woff2', '.ttf', '.eot', '.otf']):
+                # Handle font files
+                font_data = fetch_resource_binary(full_url, headers)
+                if font_data:
+                    content_type = get_font_content_type(full_url)
+                    b64_data = base64.b64encode(font_data).decode('utf-8')
+                    return f"url(data:{content_type};base64,{b64_data})"
             else:
-                # Try as text (fonts, etc.)
+                # Try as text (SVG, etc.)
                 text_data = fetch_resource(full_url, headers)
                 if text_data:
                     return f"url(data:text/plain;base64,{base64.b64encode(text_data.encode('utf-8')).decode('utf-8')})"
-        except:
+        except Exception as e:
+            print(f"    Error processing URL {full_url}: {e}")
             pass
         return match.group(0)
     
-    return url_pattern.sub(replace_url, css_content)
+    # Process @import statements first
+    css_content = import_pattern.sub(replace_import, css_content)
+    # Then process url() references
+    css_content = url_pattern.sub(replace_url, css_content)
+    
+    return css_content
 
 def get_content_type(url):
     """Determine content type from file extension"""
@@ -195,8 +271,26 @@ def get_content_type(url):
         return 'image/webp'
     elif '.ico' in url_lower:
         return 'image/x-icon'
+    elif '.bmp' in url_lower:
+        return 'image/bmp'
     else:
         return 'image/png'  # default
+
+def get_font_content_type(url):
+    """Determine font content type from file extension"""
+    url_lower = url.lower()
+    if '.woff2' in url_lower:
+        return 'font/woff2'
+    elif '.woff' in url_lower:
+        return 'font/woff'
+    elif '.ttf' in url_lower:
+        return 'font/ttf'
+    elif '.eot' in url_lower:
+        return 'application/vnd.ms-fontobject'
+    elif '.otf' in url_lower:
+        return 'font/otf'
+    else:
+        return 'application/octet-stream'
 
 # Example usage
 if __name__ == "__main__":

@@ -30,7 +30,9 @@ jobs:
       run: mkdir -p downloaded_pages
 
     - name: Run download script
-      run: python download_pages.py https://www.iranintl.com downloaded_pages/iranintl.com.html
+      run: |
+        python download_pages.py https://www.iranintl.com downloaded_pages/iranintl.com.html
+        python download_pages.py https://ir.voanews.com/ downloaded_pages/ir.voanews.com.html
     
     - name: Commit and push
       run: |
