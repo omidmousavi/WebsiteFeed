@@ -1,0 +1,52 @@
+name: Download with SingleFile
+
+on:
+  workflow_dispatch:
+
+permissions:
+  contents: write
+
+jobs:
+  download:
+    runs-on: ubuntu-latest
+    
+    steps:
+    - uses: actions/checkout@v4
+    
+    - name: Setup Node.js
+      uses: actions/setup-node@v4
+      with:
+        node-version: '18'
+    
+    - name: Install SingleFile
+      run: npm install -g single-file-cli
+    
+    - name: Install Chrome
+      run: |
+        wget -q https://dl.google.com/linux/direct/google-chrome-stable_current_amd64.deb
+        sudo dpkg -i google-chrome-stable_current_amd64.deb || sudo apt-get install -f -y
+    
+    - name: Download pages
+      run: |
+        mkdir -p downloaded_pages
+        
+        while IFS= read -r url; do
+          [[ -z "$url" || "$url" =~ ^# ]] && continue
+          
+          echo "Processing: $url"
+          domain=$(echo "$url" | sed -E 's|https?://||' | sed 's|/.*||' | sed 's|\.|_|g')
+          
+          single-file "$url" "downloaded_pages/${domain}.html"
+          
+          size=$(du -h "downloaded_pages/${domain}.html" | cut -f1)
+          echo "✅ Saved: ${domain}.html ($size)"
+          
+        done < urls
+    
+    - name: Commit and push
+      uses: EndBug/add-and-commit@v9
+      with:
+        add: 'downloaded_pages/'
+        message: 'Download pages'
+        default_author: github_actions
+        token: ${{ secrets.GITHUB_TOKEN }}
