@@ -1,0 +1,52 @@
+name: Clone Full Websites
+
+on:
+  workflow_dispatch:
+
+permissions:
+  contents: write
+
+jobs:
+  clone:
+    runs-on: ubuntu-latest
+    
+    steps:
+    - uses: actions/checkout@v4
+    
+    - name: Clone websites with wget mirror
+      run: |
+        mkdir -p downloaded_pages
+        
+        while IFS= read -r url; do
+          [[ -z "$url" || "$url" =~ ^# ]] && continue
+          
+          echo "Cloning: $url"
+          domain=$(echo "$url" | sed -E 's|https?://||' | sed 's|/.*||')
+          
+          # Mirror the entire website with all assets
+          wget \
+            --mirror \
+            --page-requisites \
+            --adjust-extension \
+            --convert-links \
+            --span-hosts \
+            --wait=2 \
+            --limit-rate=200k \
+            --user-agent="Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36" \
+            --directory-prefix=downloaded_pages \
+            --no-host-directories \
+            --cut-dirs=0 \
+            "$url"
+          
+          echo "✅ Cloned: $domain"
+          echo "---"
+          
+        done < urls
+    
+    - name: Commit and push
+      uses: EndBug/add-and-commit@v9
+      with:
+        add: 'downloaded_pages/'
+        message: 'Clone full websites'
+        default_author: github_actions
+        token: ${{ secrets.GITHUB_TOKEN }}
