@@ -16,33 +16,23 @@ jobs:
     - name: Setup Node.js
       uses: actions/setup-node@v4
       with:
-        node-version: '18'
+        node-version: '20'
     
     - name: Install inliner
       run: npm install -g inliner
     
     - name: Download and inline pages
       run: |
-        mkdir -p downloaded_pages
-        
-        while IFS= read -r url; do
-          [[ -z "$url" || "$url" =~ ^# ]] && continue
-          
-          echo "Processing: $url"
-          filename=$(echo "$url" | sed -E 's|https?://||' | sed 's|/|_|g' | sed 's|\.|_|g')
-          
-          # Use inliner with custom user agent header
-          inliner -m --preserve-comments -H 'User-Agent: Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36' "$url" > "downloaded_pages/${filename}.html"
-          
-          echo "✅ Saved: ${filename}.html"
-          sleep 2
-        done < urls
+        mkdir -p downloaded_pages_inliner
+        inliner -m --videos https://time.ir > downloaded_pages_inliner/time.html
+        echo "✅ Saved"
+        sleep 2
     
     
     - name: Commit and push
       uses: EndBug/add-and-commit@v9
       with:
-        add: 'downloaded_pages/'
+        add: 'downloaded_pages_inliner/'
         message: 'Download web pages with inliner'
         default_author: github_actions
         token: ${{ secrets.GITHUB_TOKEN }}
