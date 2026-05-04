@@ -5,6 +5,10 @@ on:
   schedule:
     - cron: '0 2 * * *'
 
+# Add this permissions block
+permissions:
+  contents: write
+
 jobs:
   download:
     runs-on: ubuntu-latest
@@ -29,15 +33,7 @@ jobs:
       run: |
         git config --global user.name "github-actions[bot]"
         git config --global user.email "github-actions[bot]@users.noreply.github.com"
-        
-        # Pull latest changes to avoid conflicts
         git pull --rebase
-        
-        # Commit if there are changes
-        if [ -n "$(git status --porcelain)" ]; then
-          git add downloaded_pages/
-          git commit -m "Update downloaded pages - $(date '+%Y-%m-%d %H:%M:%S')"
-          git push
-        else
-          echo "No changes to commit"
-        fi
+        git add downloaded_pages/
+        git commit -m "Update downloaded pages - $(date '+%Y-%m-%d %H:%M:%S')" || echo "No changes to commit"
+        git push
