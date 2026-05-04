@@ -1,4 +1,4 @@
-name: Download Single Page with Assets
+name: Download Page with Assets
 
 on:
   workflow_dispatch:
@@ -13,7 +13,7 @@ jobs:
     steps:
     - uses: actions/checkout@v4
     
-    - name: Download just the page and its assets
+    - name: Download pages with assets
       run: |
         mkdir -p downloaded_pages
         
@@ -23,13 +23,14 @@ jobs:
           echo "Downloading: $url"
           domain=$(echo "$url" | sed -E 's|https?://||' | sed 's|/.*||' | sed 's|\.|_|g')
           
-          # Download JUST this page + required assets (NOT recursive)
+          # Download HTML + CSS + JS + Images (1 level deep, no recursion)
           wget \
             --page-requisites \
             --adjust-extension \
             --convert-links \
             --span-hosts \
-            --no-directories \
+            --level=1 \
+            --no-parent \
             --timeout=30 \
             --tries=2 \
             --user-agent="Mozilla/5.0" \
